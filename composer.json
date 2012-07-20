@@ -1,0 +1,13 @@
+{
+    "name": "WanWizard/Datamapper",
+    "description": "Framework Independent ORM",
+    "authors": [
+        {
+            "name": "Harro Verton",
+            "email": "datamapper@wanwizard.eu"
+        }
+    ],
+    "autoload": {
+		"psr-0": { "Wanwizard\\Datamapper": "classes/" }
+	}
+}

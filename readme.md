@@ -22,6 +22,9 @@ for both environments which will enable the Datamapper package in that environme
 For example, CodeIgniter will require installation of the Composer PSR-0 autoloader and a CI library to activate Datamapper within the CodeIgniter environment,
 while FuelPHP already contains a PSR-0 compliant autoloader. FuelPHP however requires a package setup, which is different in 1.x and in 2.0.
 
+Datamapper also no longer uses the Frameworks own DBAL (or Query Builder), but instead includes the great multi-platform DBAL library http://github.com/FrenkyNet/Cabinet.
+This ensures that Datamapper will perform consistent on all development environments, and will support a full range of RDBMS platforms and even some NoSQL ones!
+
 ## When can we use it?
 
 As usual: whenever it's ready. No timeframe has been defined as of now, watch this repository for developments.

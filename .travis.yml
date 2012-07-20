@@ -9,6 +9,3 @@ before_script:
   - php composer.phar install --dev
 
 script: phpunit -c tests/classes/phpunit.xml
-
-notifications:
-  irc: "irc.freenode.org#cabinet"

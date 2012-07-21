@@ -235,7 +235,7 @@ class Model
 			}
 			catch ( \Exception $e )
 			{
-				throw new Exceptions\DatamapperException('Listing columns failed, you have to set the model properties with a '.
+				throw new \Datamapper\Exceptions\DatamapperException('Listing columns failed, you have to set the model properties with a '.
 					'static $_properties setting in the model. Original exception: '.$e->getMessage());
 			}
 		}

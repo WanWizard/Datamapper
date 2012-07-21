@@ -44,7 +44,6 @@ class Platform
 			// running in a FuelPHP 1.x environment?
 			elseif ( class_exists('Fuel\\Core\\Fuel', false) )
 			{
-				die('need to implement the Fuel 1.x driver here');
 				static::$_platform = new Fuelphp\Driverv1();
 			}
 

@@ -11,23 +11,20 @@
  * @version     2.0.0
  */
 
-namespace Datamapper\Platform\Codeigniter;
+namespace Datamapper\Platform\Fuelphp;
 
 use Datamapper\Model as Model;
 use Datamapper\Platform\Base as Base;
 
-// create a fake CI's DB class, we need that for the profiler interface
-class_exists('CI_DB') or eval('class CI_DB {}');
-
 /**
  * Datamapper Codeigniter interface class
  */
-class Driver extends Base
+class Driverv1 extends Base
 {
 	/**
-	 * @var	object	pointer to the CodeIgniter global object
+	 * @var	array	storage for created connections
 	 */
-	protected static $_CI = null;
+	static $connnections = array();
 
 	/**
 	 * load the global Datamapper configuration and merge it with the model configuration
@@ -39,14 +36,8 @@ class Driver extends Base
 	 */
 	public function get_config(array $config)
 	{
-		// get the CI global instance
-		empty(static::$_CI) and static::$_CI =& get_instance();
-
-		// load the global Datamapper config file
-		static::$_CI->config->load('datamapper', true, true);
-
-		// get the config values
-		if ( $defaults = static::$_CI->config->item('datamapper') )
+		// load the Datamapper config file and get the config values
+		if ( $defaults = \Config::load('datamapper', true) )
 		{
 			$config = array_merge($defaults, $config);
 		}
@@ -78,20 +69,14 @@ class Driver extends Base
 	{
 		if ( ! is_array($database) )
 		{
-			// locate the database configuration file
-			if ( ! defined('ENVIRONMENT') OR ! file_exists($file_path = APPPATH.'config/'.ENVIRONMENT.'/database.php'))
-			{
-				if ( ! file_exists($file_path = APPPATH.'config/database.php'))
-				{
-					throw new \Datamapper\Exceptions\DatamapperException('The configuration file database.php does not exist.');
-				}
-			}
+			// load the database configuration file
+			\Config::load('db', true);
 
-			// and load it
-			include($file_path);
+			// and get the config
+			$db = \Config::get('db');
 
 			// does it contain what it should contain?
-			if ( ! isset($db) OR count($db) == 0)
+			if ( empty($db) )
 			{
 				throw new \Datamapper\Exceptions\DatamapperException('No database connection settings were found in the database config file.');
 			}
@@ -99,47 +84,40 @@ class Driver extends Base
 			// if no database was defined, get CI's configured default
 			if ( empty($database) )
 			{
-				if ( ! isset($active_group) )
+				if ( ! isset($db['active']) )
 				{
-					throw new \Datamapper\Exceptions\DatamapperException('You have not specified a default database connection group.');
+					throw new \Datamapper\Exceptions\DatamapperException('You have not specified an active database in the config file.');
 				}
-				$database = $active_group;
+				$database = $db['active'];
 			}
 
 			// do we have a database definition for the defined database
 			if ( empty($db[$database]) )
 			{
-				throw new \Datamapper\Exceptions\DatamapperException('You have specified an invalid database connection group.');
+				throw new \Datamapper\Exceptions\DatamapperException('You have specified an invalid active database in the config file.');
 			}
 
 			// store the database definition
+			$db[$database]['name'] = $database;
 			$database = $db[$database];
 		}
 
-		// do we already have a connection for this database?
-		if ( ! isset(static::$_CI->{'datamapper_'.$database['database']}) )
+		// do we already have a connection to this database
+		if ( ! isset(static::$connnections[$database['name']]) )
 		{
-			// return the database connection
-			$conn = \Cabinet\DBAL\Db::connection(array(
-				'host' => $database['hostname'],
-				'port' => empty($database['port']) ? null : $database['port'],
-				'driver' => $database['dbdriver'],
-				'username' => $database['username'],
-				'password' => $database['password'],
-				'database' => $database['database'],
-			));
-
-			// create a fake CI DB class to facilitate query profiling
-			static::$_CI->{'datamapper_'.$database['database']} = new Profiler($conn, $database['database']);
-		}
-		else
-		{
-			// re-use the existing connection for this database
-			$conn = static::$_CI->{'datamapper_'.$database['database']}->connection;
+			static::$connnections[$database['name']] = \Cabinet\DBAL\Db::connection(array(
+					'driver' => $database['type'],
+					'dsn' => empty($database['connection']['dsn']) ? null : $database['connection']['dsn'],
+					'username' => $database['connection']['username'],
+					'password' => $database['connection']['password'],
+					'host' => empty($database['connection']['host']) ? null : $database['connection']['host'],
+					'port' => empty($database['connection']['port']) ? null : $database['connection']['port'],
+					'database' => empty($database['connection']['database']) ? null : $database['connection']['database'],
+				));
 		}
 
 		// return the database connection
-		return $conn;
+		return static::$connnections[$database['name']];
 	}
 
 	/**
@@ -175,11 +153,7 @@ class Driver extends Base
 	 */
 	public function pluralize($string)
 	{
-
-		// load the required CI inflector helper
-		function_exists('plural') or static::$_CI->load->helper('inflector');
-
 		// return the pluralized version
-		return plural($string);
+		return \Inflector::tableize($string);
 	}
 }

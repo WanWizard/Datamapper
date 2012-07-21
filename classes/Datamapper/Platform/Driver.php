@@ -14,9 +14,9 @@
 namespace Datamapper\Platform;
 
 /**
- * Datamapper platform interface base class
+ * Datamapper platform interface driver class
  */
-class Platform
+class Driver
 {
 	/**
 	 * @var  \Datamapper\Platform\Base  platform driver to use

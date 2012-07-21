@@ -13,7 +13,7 @@
 
 namespace Datamapper\Core;
 
-use \Datamapper\Platform\Platform as Platform;
+use \Datamapper\Platform\Driver as Platform;
 
 /**
  * Datamapper Model base class
@@ -58,37 +58,37 @@ class Model
 	// protected static $_many_many;
 
 	/**
-	 * @var  string  connection to use
+	 * @var	string	cached model connections
 	 */
 	protected static $_connection_cached = array();
 
 	/**
-	 * @var  array  configuration for this model
+	 * @var	array	cached model configurations
 	 */
 	protected static $_config_cached = array();
 
 	/**
-	 * @var  array  cached tables
+	 * @var	array	cached model table names
 	 */
 	protected static $_table_names_cached = array();
 
 	/**
-	 * @var  array  cached properties
+	 * @var	array	cached model properties
 	 */
 	protected static $_properties_cached = array();
 
 	/**
-	 * @var  string  relationships
+	 * @var	string	cached model relationships
 	 */
 	protected static $_relations_cached = array();
 
 	/**
-	 * @var  array  cached observers
+	 * @var	array	cached model observers
 	 */
 	protected static $_observers_cached = array();
 
 	/**
-	 * @var  array  array of valid relation types
+	 * @var	array	array of valid relation types
 	 */
 	protected static $_valid_relations = array(
 		'belongs_to'    => 'Datamapper\\Relation\\BelongsTo',

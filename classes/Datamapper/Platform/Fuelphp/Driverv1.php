@@ -114,6 +114,12 @@ class Driverv1 extends Base
 					'port' => empty($database['connection']['port']) ? null : $database['connection']['port'],
 					'database' => empty($database['connection']['database']) ? null : $database['connection']['database'],
 				));
+
+			// define the profiler callbacks for this connection
+			static::$connnections[$database['name']]->profilerCallbacks(
+				function($data) { \Profiler::start('Datamapper', $data['query']); },
+				function($data) { \Profiler::stop(''); }
+			);
 		}
 
 		// return the database connection

@@ -48,7 +48,7 @@ class Driver
 			}
 
 			// running in a FuelPHP 2.x environment?
-			elseif ( class_exists('\Fuel\Kernel\Environment', false) )
+			elseif ( class_exists('Fuel\\Kernel\\Environment', false) )
 			{
 				die('need to implement the Fuel 2.x driver here');
 				static::$_platform = new Fuelphp\Driverv2();
@@ -87,6 +87,18 @@ class Driver
 	public static function get_connection($database)
 	{
 		return static::$_platform->get_connection($database);
+	}
+
+	/**
+	 * return the defined extensions that could be loaded
+	 *
+	 * @param	bool	$overload	if true we allow overloading of core methods
+	 *
+	 * @return	array	array with loaded extension methods
+	 */
+	public static function get_extensions($overload = false)
+	{
+		return static::$_platform->get_extensions($overload);
 	}
 
 	/**

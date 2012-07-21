@@ -21,6 +21,25 @@ use Datamapper\Model as Model;
 abstract class Base
 {
 	/**
+	 * available core extension classes
+	 */
+	protected $core_methods = array(
+		'Datamapper\\Core\\Query' => array(
+			'dynamic' => array(
+				'get',
+			),
+			'static' => array(
+			),
+		),
+	);
+
+	/**
+	 * loaded extension classes
+	 */
+	protected $extension_methods = array(
+	);
+
+	/**
 	 * load the global Datamapper configuration and merge it with the model configuration
 	 *
 	 * @param	array	model specific configuration
@@ -37,6 +56,15 @@ abstract class Base
 	 * @return \Cabinet\DBAL\Connection
 	 */
 	abstract function get_connection($database);
+
+	/**
+	 * return the defined extensions that could be loaded
+	 *
+	 * @param	bool	$overload	if true we allow overloading of core methods
+	 *
+	 * @return	array	array with loaded extension methods
+	 */
+	abstract function get_extensions($overload = false);
 
 	/**
 	 * return the cached properties for this model (if exist)

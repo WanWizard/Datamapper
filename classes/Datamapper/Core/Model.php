@@ -18,8 +18,17 @@ use \Datamapper\Platform\Driver as Platform;
 /**
  * Datamapper Model base class
  */
-class Model
+class Model implements \ArrayAccess, \IteratorAggregate
 {
+	/***************************************************************************
+	 * Class constants
+	 ***************************************************************************/
+
+	/**
+	 * @var	string	current dataMapper version
+	 */
+	const VERSION = '2.0.0';
+
 	/***************************************************************************
 	 * Static usage
 	 ***************************************************************************/
@@ -88,6 +97,16 @@ class Model
 	protected static $_observers_cached = array();
 
 	/**
+	 * @var	array	cached extension methods
+	 */
+	protected static $_methods_cached = array();
+
+	/**
+	 * @var	array	cached static extension methods
+	 */
+	protected static $_static_methods_cached = array();
+
+	/**
 	 * @var	array	array of valid relation types
 	 */
 	protected static $_valid_relations = array(
@@ -107,8 +126,19 @@ class Model
 	 */
 	public static function __callStatic($method, $args)
 	{
-		var_dump($method, $args);
-		die('this callStatic method is not implemented !');
+		$class = get_called_class();
+
+		// do we have a method by this name?
+		if ( empty(static::$_static_methods_cached[$method]) )
+		{
+			throw new \Datamapper\Exceptions\DatamapperException('unknown static method "'.$method.'" called');
+		}
+
+		// push the current object on the arguments stack
+		array_unshift($args, $this);
+
+		// call the extension method and return the result
+		return call_user_func_array(static::$_static_methods_cached[$method].'::'.$method, $args);
 	}
 
 	/**
@@ -128,6 +158,9 @@ class Model
 		{
 			// no, so create it
 			static::$_config_cached[$class] = Platform::get_config(isset(static::$_config)?static::$_config:array());
+
+			// also fetch this models extensions
+			list(static::$_methods_cached[$class], static::$_static_methods_cached[$class]) = Platform::get_extensions(static::get_config('overload_core'));
 		}
 
 		return isset(static::$_config_cached[$class][$key]) ? static::$_config_cached[$class][$key] : $default;
@@ -396,6 +429,16 @@ class Model
 	 ***************************************************************************/
 
 	/**
+	 * @var	\Cabinet\DBAL\Connection	current DBAL query object
+	 */
+	protected $_query = null;
+
+	/**
+	 * @var	Core_DatasetIterator	current iterator object
+	 */
+	protected $_iterator = null;
+
+	/**
 	 * @var	bool	keeps track of whether it's a new object
 	 */
 	protected $_is_new = true;
@@ -406,7 +449,7 @@ class Model
 	protected $_frozen = false;
 
 	/**
-	 * @var	array	keeps the current state of the object
+	 * @var	array	keeps the current state of all retrieved objects
 	 */
 	protected $_data = array();
 
@@ -416,7 +459,7 @@ class Model
 	protected $_related_data = array();
 
 	/**
-	 * @var	array	keeps a copy of the object as it was retrieved from the database
+	 * @var	array	keeps a copy of the current object as it was retrieved from the database
 	 */
 	protected $_original = array();
 
@@ -442,6 +485,7 @@ class Model
 		// before the constructor is called, to _data is already populated
 		if( ! empty($this->_data) )
 		{
+			throw new \Exception('TODO: deal with PHP native hydration!');
 			$this->_original = $this->_data;
 			$new = false;
 		}
@@ -452,6 +496,9 @@ class Model
 			// fetch the models properties
 			$properties = $this->properties();
 
+			// create the data storage for this object
+			$this->_data[0] = array();
+
 			// loop through the defined properties
 			foreach ($properties as $prop => $settings)
 			{
@@ -459,14 +506,14 @@ class Model
 				if (array_key_exists($prop, $data))
 				{
 					// assign it to this objects data storage
-					$this->_data[$prop] = $data[$prop];
+					$this->_data[0][$prop] = $data[$prop];
 				}
 
 				// if not, was a default value defined for this property?
 				elseif (array_key_exists('default', $settings))
 				{
 					// assign it to this objects data storage
-					$this->_data[$prop] = $settings['default'];
+					$this->_data[0][$prop] = $settings['default'];
 				}
 			}
 
@@ -484,7 +531,7 @@ class Model
 			$this->_update_original($data);
 
 			// and merge it with the loaded data
-			$this->_data = array_merge($this->_data, $data);
+			$this->_data[0] = array_merge($this->_data[0], $data);
 
 			// this is an existing data object
 			$this->_is_new = false;
@@ -492,6 +539,223 @@ class Model
 			// call the defined after_load observers
 			$this->observe('after_load');
 		}
+	}
+
+	/**
+	 * method calls magic method, allows for dynamic method extensions
+	 *
+	 * @param	string	config key to retrieve
+	 * @param	mixed	default value in case the key doesn't exist
+	 *
+	 * @return  mixed
+	 */
+	public function __call($method, $args)
+	{
+		// get this class name
+		$class = get_class($this);
+
+		// do we have a method by this name?
+		if ( empty(static::$_methods_cached[$class][$method]) )
+		{
+			throw new \Datamapper\Exceptions\DatamapperException('unknown method "'.$method.'" called');
+		}
+
+		// push the current object on the arguments stack
+		array_unshift($args, $this);
+
+		// call the extension method and return the result
+		return call_user_func_array(static::$_methods_cached[$class][$method].'::'.$method, $args);
+	}
+
+	/**
+	 * Fetch a property or relation
+	 *
+	 * @param	string	$property	the name of the property or relation to fetch
+	 *
+	 * @return	mixed
+	 */
+	public function & __get($property)
+	{
+		// check the loaded data first
+		if ( isset($this->_data[0]) and array_key_exists($property, $this->_data[0]) )
+		{
+			return $this->_data[0][$property];
+		}
+
+		// maybe it's a relation?
+		elseif ( $rel = static::relations($property) )
+		{
+			if ( ! array_key_exists($property, $this->_data_relations) )
+			{
+				if ( $this->is_new() )
+				{
+					$this->_data_relations[$property] = $rel->singular ? null : array();
+				}
+				else
+				{
+					$this->_data_relations[$property] = $rel->get($this);
+				}
+
+				$this->_update_original_relations(array($property));
+			}
+			return $this->_data_relations[$property];
+		}
+
+		// something odd, complain about it
+		else
+		{
+			throw new \OutOfBoundsException('Property "'.$property.'" not found for '.get_called_class().'.');
+		}
+	}
+
+	/**
+	 * Set a property or relation
+	 *
+	 * @param	string	$property	the name of the property or relation to set
+	 * @param	mixed	$value		value to set
+	 *
+	 * @return	\Datamapper\Core\Model for chaining
+	 */
+	public function __set($property, $value)
+	{
+		// you can't change an object in frozen state
+		if ( $this->_frozen )
+		{
+			throw new FrozenObject('No changes allowed.');
+		}
+
+		// if an array of properties is passed, iterate over it
+		if ( is_array($property) )
+		{
+			foreach ( $property as $p => $v )
+			{
+				$this->set($p, $v);
+			}
+		}
+		else
+		{
+			// no array, so we need 2 arguments
+			if ( func_num_args() < 2 )
+			{
+				throw new \InvalidArgumentException('You need to pass both a property name and a value to set().');
+			}
+
+			// you can not alter the primary keys of existing records
+			if ( in_array($property, static::primary_key()) and $this->{$property} !== null )
+			{
+				throw new \FuelException('Primary key cannot be changed.');
+			}
+
+			// if it's a property, set it directly
+			if ( array_key_exists($property, static::properties()) )
+			{
+				$this->_data[0][$property] = $value;
+			}
+
+			// if it's a relation, deal with it
+			elseif ( static::relations($property) )
+			{
+				$this->is_fetched($property) or $this->_reset_relations[$property] = true;
+				$this->_data_relations[$property] = $value;
+			}
+
+			// assume it's a non-column property
+			else
+			{
+				$this->_data[0][$property] = $value;
+			}
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Check whether a property exists, only return true for table columns and relations
+	 *
+	 * @param	string	$property	the name of the property or relation to check
+	 *
+	 * @return	bool
+	 */
+	public function __isset($property)
+	{
+		// check the loaded data first
+		if ( isset($this->_data[0]) and array_key_exists($property, $this->_data[0]) )
+		{
+			return true;
+		}
+
+		// if not present, is it a table column?
+		elseif ( array_key_exists($property, static::properties()) )
+		{
+			return true;
+		}
+
+		// if not, perhaps it's a relation
+		elseif ( static::relations($property) )
+		{
+			return true;
+		}
+
+		// nope, don't know this one...
+		return false;
+	}
+
+	/**
+	 * Empty a property or reset a relation
+	 *
+	 * @param	string	$property	the name of the property or relation to unset
+	 */
+	public function __unset($property)
+	{
+		// check the loaded data first
+		if ( isset($this->_data[0]) and array_key_exists($property, $this->_data[0]) )
+		{
+			if ( array_key_exists($property, static::properties()) )
+			{
+				$this->_data[$property] = null;
+			}
+			else
+			{
+				unset($this->_data[0][$property]);
+			}
+		}
+
+		// check if it's a relation
+		elseif ( $rel = static::relations($property) )
+		{
+			$this->_data_relations[$property] = $rel->singular ? null : array();
+		}
+	}
+
+	/**
+	 * Returns the models current query object. Will create one if needed
+	 *
+	 * @return	\Cabinet\DBAL\DB	current query object
+	 */
+	public function query($reset = false)
+	{
+		if ( $reset or ! is_object($this->_query) )
+		{
+			$this->_query = static::connection()->select()->from(static::table());
+		}
+
+		return $this->_query;
+	}
+
+	/**
+	 * Returns the models current query object. Will create one if needed
+	 *
+	 * @param	array	$records	result of a Cabinet DBAL query
+	 *
+	 * @return	\Datamapper\Core\Model	current object, for chaining
+	 */
+	public function hydrate(array $records = array())
+	{
+		// reset the data in the current object
+		$this->_data = $records;
+		$this->_original = isset($this->_data[0]) ? $this->_data[0] : array();
+
+		return $this;
 	}
 
 	/**
@@ -597,6 +861,78 @@ class Model
 				$this->_original_relations[$rel] = $data ? $data->implode_pk($data) : null;
 			}
 		}
+	}
+
+	/***************************************************************************
+	 * ArrayAccess methods
+	 ***************************************************************************/
+
+	public function offsetSet($offset, $value)
+	{
+		throw new \Datamapper\Exceptions\DatamapperException('You can not modify a Datamapper object using array access');
+	}
+
+	public function offsetExists($offset)
+	{
+		// does the requested offset exist?
+		return isset($this->_data[$offset]);
+	}
+
+	public function offsetUnset($offset)
+	{
+		// does the requested offset exist?
+		if ( isset($this->_data[$offset]) )
+		{
+			// remove the data element
+			unset($this->_data[$offset]);
+
+			// reindex the keys
+			$this->_data = array_values($this->_data);
+
+			// if the first one was removed, also reset the original data
+			$offset === 0 and $this->_original = array();
+		}
+		else
+		{
+			// nope...
+			return false;
+		}
+	}
+
+	public function offsetGet($offset)
+	{
+		// does the requested offset exist?
+		if ( isset($this->_data[$offset]) )
+		{
+			// dehydrate it and return the object
+			$class = get_class($this);
+			return new $class($this->_data[$offset]);
+		}
+		else
+		{
+			// nope...
+			return null;
+		}
+	}
+
+	/***************************************************************************
+	 * IteratorAggregate methods
+	 ***************************************************************************/
+
+	/**
+	 * allows the all array to be iterated over without having to specify it
+	 *
+	 * @return	Iterator	An iterator for the all array
+	 */
+	public function getIterator()
+	{
+		// do we have an iterator object defined?
+		if ( ! $this->_iterator instanceOf DatasetIterator )
+		{
+			$this->_iterator = new DatasetIterator($this, $this->_data);
+		}
+
+		return $this->_iterator;
 	}
 
 }

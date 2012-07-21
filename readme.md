@@ -16,10 +16,11 @@ This repository contains the new codebase for Datamapper for PHP.
 
 You may notice it no longer references CodeIgniter in the name, because the new code is designed to support multiple frameworks.
 
-From the start, it will support CodeIgniter (2.0.0+), and FuelPHP (both 1.x and 2.x). In due time separate repositories will be created
-for both environments which will enable the Datamapper package in that environment.
+From the start, it will support CodeIgniter (2.0.0+), and FuelPHP (both 1.x and 2.x), through specific integration packages
+for these frameworks. 
 
-For example, CodeIgniter will require installation of the Composer PSR-0 autoloader and a CI library to activate Datamapper within the CodeIgniter environment,
+Currently, there is an integration package for CodeIgniter (see the Datamapper-CI repo) and FuelPHP v1.x
+(see the Datamapper-Fuel repo). For example, CodeIgniter will require installation of the Composer PSR-0 autoloader and a CI library to activate Datamapper within the CodeIgniter environment,
 while FuelPHP already contains a PSR-0 compliant autoloader. FuelPHP however requires a package setup, which is different in 1.x and in 2.0.
 
 Datamapper also no longer uses the Frameworks own DBAL (or Query Builder), but instead includes the great multi-platform DBAL library http://github.com/FrenkyNet/Cabinet.

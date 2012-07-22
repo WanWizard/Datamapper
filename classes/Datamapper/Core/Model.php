@@ -128,17 +128,42 @@ class Model implements \ArrayAccess, \IteratorAggregate
 	{
 		$class = get_called_class();
 
+		// store the method name, we need it later
+		$index = $method;
+
 		// do we have a method by this name?
-		if ( empty(static::$_static_methods_cached[$method]) )
+		if ( empty(static::$_static_methods_cached[$class][$index]) )
 		{
-			throw new \Datamapper\Exceptions\DatamapperException('unknown static method "'.$method.'" called');
+			// check it it's a wildcard method
+			foreach ( array_keys(static::$_static_methods_cached[$class]) as $index )
+			{
+				if ( substr($index,-1) === '*')
+				{
+					if ( strpos($method, substr($index,0,-1)) === 0 )
+					{
+						// add the remainder of the method name to the argument stack
+						array_unshift($args, substr($method, strlen($index)));
+
+						// and set the requested method
+						$method = substr($index,0,-1);
+
+						break;
+					}
+				}
+			}
+
+			// if we didn't find the wildcard, bail out
+			if ( $index == $method )
+			{
+				throw new \Datamapper\Exceptions\DatamapperException('unknown static method "'.$method.'" called');
+			}
 		}
 
-		// push the current object on the arguments stack
-		array_unshift($args, $this);
+		// push the current classname on the arguments stack
+		array_unshift($args, $class);
 
 		// call the extension method and return the result
-		return call_user_func_array(static::$_static_methods_cached[$method].'::'.$method, $args);
+		return call_user_func_array(static::$_static_methods_cached[$class][$index].'::static_'.$method, $args);
 	}
 
 	/**
@@ -557,7 +582,23 @@ class Model implements \ArrayAccess, \IteratorAggregate
 		// do we have a method by this name?
 		if ( empty(static::$_methods_cached[$class][$method]) )
 		{
-			throw new \Datamapper\Exceptions\DatamapperException('unknown method "'.$method.'" called');
+			// allow for dynamic getters, setters and unsetters
+			if (substr($method, 0, 4) == 'get_')
+			{
+				return $this->get(substr($method, 4));
+			}
+			elseif (substr($method, 0, 4) == 'set_')
+			{
+				return $this->set(substr($method, 4), reset($args));
+			}
+			elseif (substr($method, 0, 6) == 'unset_')
+			{
+				return $this->__unset(substr($method, 6));
+			}
+			else
+			{
+				throw new \Datamapper\Exceptions\DatamapperException('unknown method "'.$method.'" called');
+			}
 		}
 
 		// push the current object on the arguments stack
@@ -808,6 +849,26 @@ class Model implements \ArrayAccess, \IteratorAggregate
 				}
 			}
 		}
+	}
+
+	/**
+	 * Return the contents of the current object as an array
+	 *
+	 * @return  array
+	 */
+	public function to_array()
+	{
+		return $this->_data[0];
+	}
+
+	/**
+	 * Return all the contents of the current object as an array
+	 *
+	 * @return  array
+	 */
+	public function all_to_array()
+	{
+		return $this->_data;
 	}
 
 	/**

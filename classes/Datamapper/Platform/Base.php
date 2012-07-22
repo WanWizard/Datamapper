@@ -27,8 +27,16 @@ abstract class Base
 		'Datamapper\\Core\\Query' => array(
 			'dynamic' => array(
 				'get',
+				'get_one',
+				'offset',
+				'limit',
+				'where',
 			),
 			'static' => array(
+				'find',
+				'count_by',
+				'find_by*',
+				'find_all_by*',
 			),
 		),
 	);

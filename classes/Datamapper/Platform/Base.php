@@ -26,11 +26,28 @@ abstract class Base
 	protected $core_methods = array(
 		'Datamapper\\Core\\Query' => array(
 			'dynamic' => array(
+				'select*',
+				'distinct',
 				'get',
 				'get_one',
+				'get_where',
 				'offset',
 				'limit',
+				'order_by',
 				'where',
+				'where_in',
+				'where_not_in',
+				'or_where',
+				'or_where_in',
+				'or_where_not_in',
+				'like',
+				'or_like',
+				'not_like',
+				'or_not_like',
+				'ilike',
+				'or_ilike',
+				'not_ilike',
+				'or_not_ilike',
 			),
 			'static' => array(
 				'find',

@@ -49,6 +49,11 @@ class Model implements \ArrayAccess, \IteratorAggregate
 	// protected static $_table_name;
 
 	/**
+	 * @var  string  table name to overwrite assumption
+	 */
+	// protected static $_order_by;
+
+	/**
 	 * @var  array  array of object properties
 	 */
 	// protected static $_properties;
@@ -167,7 +172,7 @@ class Model implements \ArrayAccess, \IteratorAggregate
 	}
 
 	/**
-	 * Fetch the database connection name to use
+	 * Fetch the config item
 	 *
 	 * @param	string	config key to retrieve
 	 * @param	mixed	default value in case the key doesn't exist
@@ -189,6 +194,25 @@ class Model implements \ArrayAccess, \IteratorAggregate
 		}
 
 		return isset(static::$_config_cached[$class][$key]) ? static::$_config_cached[$class][$key] : $default;
+	}
+
+	/**
+	 * Set a config item for this model
+	 *
+	 * @param	string	config key to retrieve
+	 * @param	mixed	value to set
+	 *
+	 * @return  mixed
+	 */
+	public static function set_config($key, $value)
+	{
+		$class = get_called_class();
+
+		// connection for this class is unknown
+		if ( array_key_exists($class, static::$_config_cached) )
+		{
+			static::$_config_cached[$class][$key] = $value;
+		}
 	}
 
 	/**
@@ -499,6 +523,11 @@ class Model implements \ArrayAccess, \IteratorAggregate
 	protected $_related_deleted = array();
 
 	/**
+	 * @var	array	interal query state tracking
+	 */
+	protected $_query_states = array();
+
+	/**
 	 * Constructor
 	 *
 	 * @param  array
@@ -579,8 +608,11 @@ class Model implements \ArrayAccess, \IteratorAggregate
 		// get this class name
 		$class = get_class($this);
 
+		// store the method name, we need it later
+		$index = $method;
+
 		// do we have a method by this name?
-		if ( empty(static::$_methods_cached[$class][$method]) )
+		if ( empty(static::$_methods_cached[$class][$index]) )
 		{
 			// allow for dynamic getters, setters and unsetters
 			if (substr($method, 0, 4) == 'get_')
@@ -597,7 +629,25 @@ class Model implements \ArrayAccess, \IteratorAggregate
 			}
 			else
 			{
-				throw new \Datamapper\Exceptions\DatamapperException('unknown method "'.$method.'" called');
+				// check it it's a wildcard method
+				foreach ( array_keys(static::$_methods_cached[$class]) as $index )
+				{
+					if ( substr($index,-1) === '*')
+					{
+						if ( strpos($method, substr($index,0,-1)) === 0 )
+						{
+							// add the remainder of the method name to the argument stack
+							array_unshift($args, substr($method, strlen($index)));
+
+							// and set the requested method
+							$method = substr($index,0,-1);
+
+							break;
+						}
+					}
+					throw new \Datamapper\Exceptions\DatamapperException('unknown method "'.$method.'" called');
+
+				}
 			}
 		}
 
@@ -605,7 +655,7 @@ class Model implements \ArrayAccess, \IteratorAggregate
 		array_unshift($args, $this);
 
 		// call the extension method and return the result
-		return call_user_func_array(static::$_methods_cached[$class][$method].'::'.$method, $args);
+		return call_user_func_array(static::$_methods_cached[$class][$index].'::'.$method, $args);
 	}
 
 	/**
@@ -775,9 +825,14 @@ class Model implements \ArrayAccess, \IteratorAggregate
 	 */
 	public function query($reset = false)
 	{
+		// do we need to create a new query object?
 		if ( $reset or ! is_object($this->_query) )
 		{
+			// yup, create one
 			$this->_query = static::connection()->select()->from(static::table());
+
+			// and reset the query state
+			$this->_query_states = array();
 		}
 
 		return $this->_query;
@@ -871,6 +926,10 @@ class Model implements \ArrayAccess, \IteratorAggregate
 		return $this->_data;
 	}
 
+	/***************************************************************************
+	 * Internal public methods, these should NOT be called by user code !
+	 ***************************************************************************/
+
 	/**
 	 * Update the original setting for this object
 	 *
@@ -922,6 +981,35 @@ class Model implements \ArrayAccess, \IteratorAggregate
 				$this->_original_relations[$rel] = $data ? $data->implode_pk($data) : null;
 			}
 		}
+	}
+
+	/**
+	 * Get a query state value for the current query
+	 *
+	 * @param	string	$key	key value to fetch
+	 *
+	 * @return	mixed
+	 */
+	public function _get_query_state($key)
+	{
+		// some special cases
+		if ( $key == 'default_order_by' and isset(static::$_order_by) )
+		{
+			return static::$_order_by;
+		}
+
+		return isset($this->_query_states[$key]) ? $this->_query_states[$key] : null;
+	}
+
+	/**
+	 * Get a query state value for the current query
+	 *
+	 * @param	string	$key	key to set
+	 * @param	string	$value	value to set for this key
+	 */
+	public function _set_query_state($key, $value)
+	{
+		$this->_query_states[$key] = $value;
 	}
 
 	/***************************************************************************
